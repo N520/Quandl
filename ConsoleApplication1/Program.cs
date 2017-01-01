@@ -2,31 +2,48 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ConsoleApplication1 {
     class Program {
         private static string[] names = { "NASDAQ_MSFT", "NASDAQ_AAPL", "NASDAQ_GOOG" };
-
+        private static List<string> list = new List<string>();
+        private static List<Task> taskList = new List<Task>();
+        private static ManualResetEvent ready = new ManualResetEvent(false);
         static void Main(string[] args) {
-            List<Task<string>> list = new List<Task<string>>();
+            Task t;
             foreach (var name in names) {
-                var task = Task.Run(() => RetrieveStockData(name));
-                var seriesTask = Task.Run(() => GetSeries(new List<string>() { task.Result }, name));
-                var trendTask = Task.Run(() => GetTrend(new List<string>() { task.Result }, name));
-                list.Add(seriesTask); list.Add(trendTask);
+                GetQuandlDataAsync(name);
+
             }
-            Task.WaitAll(list.ToArray());
+            ready.WaitOne();
+            DisplayData(list);
             Console.WriteLine("Done");
-            DisplayData(list.Select(item => item.Result).ToList());
+        }
+
+        private static async void GetQuandlDataAsync(string name) {
+            var stockDataTask = Task.Run(() => RetrieveStockData(name));
+            taskList.Add(stockDataTask);
+            var stockData = await stockDataTask;
+            var seriesData = Task.Run(() => GetSeries(new List<string>() { stockData }, name));
+            var trendData = Task.Run(() => GetTrend(new List<string>() { stockData }, name));
+            taskList.Add(seriesData);
+            taskList.Add(trendData);
+            list.Add(await seriesData);
+            list.Add(await trendData);
+            if (name == names.Last())
+                ready.Set();
         }
 
         private static string RetrieveStockData(string name) {
+            Thread.Sleep(1000);
             Console.WriteLine($"{name} stockValues");
             return $"{name} stockValues";
         }
 
         private static string GetSeries(List<string> stockValues, string name) {
+            Thread.Sleep(2000);
             string s = $"{name}";
             foreach (var value in stockValues) {
                 s += $" {value}";
@@ -36,6 +53,7 @@ namespace ConsoleApplication1 {
         }
 
         private static string GetTrend(List<string> stockValues, string name) {
+            Thread.Sleep(2000);
             string s = $"{name}";
             foreach (var value in stockValues) {
                 s += $" {value}";
