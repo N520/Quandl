@@ -9,10 +9,8 @@ namespace ConsoleApplication1 {
     class Program {
         private static string[] names = { "NASDAQ_MSFT", "NASDAQ_AAPL", "NASDAQ_GOOG" };
         private static List<string> list = new List<string>();
-        private static List<Task> taskList = new List<Task>();
         private static ManualResetEvent ready = new ManualResetEvent(false);
         static void Main(string[] args) {
-            Task t;
             foreach (var name in names) {
                 GetQuandlDataAsync(name);
 
@@ -24,15 +22,12 @@ namespace ConsoleApplication1 {
 
         private static async void GetQuandlDataAsync(string name) {
             var stockDataTask = Task.Run(() => RetrieveStockData(name));
-            taskList.Add(stockDataTask);
             var stockData = await stockDataTask;
             var seriesData = Task.Run(() => GetSeries(new List<string>() { stockData }, name));
             var trendData = Task.Run(() => GetTrend(new List<string>() { stockData }, name));
-            taskList.Add(seriesData);
-            taskList.Add(trendData);
             list.Add(await seriesData);
             list.Add(await trendData);
-            if (name == names.Last())
+            if (list.Count == (names.Count() * 2))
                 ready.Set();
         }
 
