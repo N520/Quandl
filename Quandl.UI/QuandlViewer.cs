@@ -5,27 +5,59 @@ using System.Windows.Forms;
 using System.Windows.Forms.DataVisualization.Charting;
 using Quandl.API;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace Quandl.UI {
+
     public partial class QuandlViewer : Form {
 
         private QuandlService service;
         private string[] names = { "NASDAQ_MSFT", "NASDAQ_AAPL", "NASDAQ_GOOG" };
         private const int INTERVAL = 2000;
+        private List<Series> list;
+        private ManualResetEvent ready = new ManualResetEvent(false);
+
 
         public QuandlViewer() {
             InitializeComponent();
             service = new QuandlService();
+            list = new List<Series>();
         }
 
         private void displayButton_Click(object sender, EventArgs e) {
             //SequentialImplementation();
-            ParallelImplementation();
+            //ParallelImplementationV1();
+            Task.Run(() => ParallelImplementationV2());
         }
 
-        private void ParallelImplementation() {
-            var tasks = names.Select(n => Task.Run(() => RetrieveStockData(n)).ContinueWith((t) =>
-            {
+        private void ParallelImplementationV2() {
+            foreach (var name in names) {
+                GetQuandlDataAsync(name);
+            }
+            ready.WaitOne();
+            //DisplayData(list);
+            Invoke(new MethodInvoker(delegate () {
+                DisplayData(list);
+            }));
+            Invoke(new MethodInvoker(delegate () {
+                SaveImage("chart");
+            }));
+            
+        }
+
+        private async void GetQuandlDataAsync(string name) {
+            var stockDataTask = Task.Run(() => RetrieveStockData(name));
+            var stockData = await stockDataTask;
+            var seriesData = Task.Run(() => GetSeries(stockData.GetValues(), name));
+            var trendData = Task.Run(() => GetTrend(stockData.GetValues(), name));
+            list.Add(await seriesData);
+            list.Add(await trendData);
+            if (list.Count == (names.Count() * 2))
+                ready.Set();
+        }
+
+        private void ParallelImplementationV1() {
+            var tasks = names.Select(n => Task.Run(() => RetrieveStockData(n)).ContinueWith((t) => {
                 var values = t.Result.GetValues();
                 var seriesTask =
                     Task.Run(() => GetSeries(values, n));
